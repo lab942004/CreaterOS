@@ -1,0 +1,557 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  EDITOR
+  ANALYST
+  VIEWER
+}
+
+enum ContentStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  ARCHIVED
+}
+
+enum ContentType {
+  VIDEO
+  SHORT
+  REEL
+  POST
+  CAROUSEL
+  ARTICLE
+  IMAGE
+  SCRIPT
+  THUMBNAIL
+}
+
+enum PlatformType {
+  YOUTUBE
+  INSTAGRAM
+  TIKTOK
+  FACEBOOK
+  LINKEDIN
+  TWITTER
+}
+
+model User {
+  id             String            @id @default(uuid())
+  email          String            @unique
+  name           String
+  password       String
+  avatar         String?
+  role           Role              @default(OWNER)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  onboardingStep Int               @default(1)
+  isOnboarded    Boolean           @default(false)
+  profile        Profile?
+  workspaces     WorkspaceMember[]
+  sessions       SecuritySession[]
+  auditLogs      AuditLog[]
+}
+
+model Profile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  niche     String?
+  bio       String?
+  goals     String[] @default([])
+  platforms String[] @default([])
+  timezone  String   @default("UTC")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Workspace {
+  id              String             @id @default(uuid())
+  name            String
+  slug            String             @unique
+  ownerId         String
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  members         WorkspaceMember[]
+  socials         SocialAccount[]
+  contents        Content[]
+  ideas           Idea[]
+  opportunities   Opportunity[]
+  strategies      Strategy[]
+  conversations   AIConversation[]
+  calendar        CalendarEvent[]
+  videos          Video[]
+  thumbnails      Thumbnail[]
+  audience        AudienceMetric[]
+  questions       AudienceQuestion[]
+  comments        Comment[]
+  trends          Trend[]
+  automations     Automation[]
+  creatorBrain    CreatorBrain?
+  creatorMemories CreatorMemory[]
+  brandKit        BrandKit?
+  brandDeals      BrandDeal[]
+  campaigns       Campaign[]
+  teamTasks       TeamTask[]
+  reports         Report[]
+  notifications   Notification[]
+  subscription    Subscription?
+}
+
+model WorkspaceMember {
+  id          String    @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        Role      @default(EDITOR)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, userId])
+}
+
+model SocialAccount {
+  id           String       @id @default(uuid())
+  workspaceId  String
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  platform     PlatformType
+  accountName  String
+  username     String
+  profileUrl   String?
+  avatarUrl    String?
+  followers    Int          @default(0)
+  isConnected  Boolean      @default(true)
+  isMock       Boolean      @default(true)
+  accessToken  String?
+  refreshToken String?
+  tokenExpires DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  contents     Content[]
+}
+
+model Content {
+  id               String          @id @default(uuid())
+  workspaceId      String
+  workspace        Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  socialAccountId  String?
+  socialAccount    SocialAccount?  @relation(fields: [socialAccountId], references: [id], onDelete: SetNull)
+  title            String
+  description      String?
+  caption          String?
+  type             ContentType     @default(POST)
+  platform         PlatformType    @default(YOUTUBE)
+  status           ContentStatus   @default(DRAFT)
+  thumbnailUrl     String?
+  mediaUrl         String?
+  scheduledAt      DateTime?
+  publishedAt      DateTime?
+  tags             String[]        @default([])
+  views            Int             @default(0)
+  likes            Int             @default(0)
+  commentsCount    Int             @default(0)
+  shares           Int             @default(0)
+  engagementRate   Float           @default(0.0)
+  watchTimeMinutes Float           @default(0.0)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  dna              ContentDNA?
+  metrics          ContentMetric[]
+}
+
+model ContentDNA {
+  id              String   @id @default(uuid())
+  contentId       String   @unique
+  content         Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  hook            String?
+  topic           String?
+  format          String?
+  tone            String?
+  lengthSeconds   Int?
+  keywords        String[] @default([])
+  cta             String?
+  targetAudience  String?
+  strengths       String[] @default([])
+  weaknesses      String[] @default([])
+  recommendations String[] @default([])
+  visualStyle     String?
+  score           Int      @default(85)
+  createdAt       DateTime @default(now())
+}
+
+model ContentMetric {
+  id        String   @id @default(uuid())
+  contentId String
+  content   Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now())
+  views     Int      @default(0)
+  likes     Int      @default(0)
+  comments  Int      @default(0)
+  shares    Int      @default(0)
+  watchTime Float    @default(0)
+}
+
+model Idea {
+  id             String       @id @default(uuid())
+  workspaceId    String
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  title          String
+  hook           String?
+  format         ContentType  @default(VIDEO)
+  platform       PlatformType @default(YOUTUBE)
+  category       String       @default("General")
+  reason         String?
+  potentialScore Int          @default(80)
+  cta            String?
+  isFavorite     Boolean      @default(false)
+  isArchived     Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+}
+
+model Opportunity {
+  id          String       @id @default(uuid())
+  workspaceId String
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  type        String
+  title       String
+  description String
+  platform    PlatformType @default(YOUTUBE)
+  impactScore Int          @default(85)
+  actionType  String
+  createdAt   DateTime     @default(now())
+}
+
+model Strategy {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  title       String
+  type        String
+  content     String
+  pillars     String[]  @default([])
+  goals       String[]  @default([])
+  createdAt   DateTime  @default(now())
+}
+
+model AIConversation {
+  id          String      @id @default(uuid())
+  workspaceId String
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  title       String      @default("New Chat")
+  agentType   String
+  createdAt   DateTime    @default(now())
+  messages    AIMessage[]
+}
+
+model AIMessage {
+  id             String         @id @default(uuid())
+  conversationId String
+  conversation   AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+  dataReferences Json?
+  createdAt      DateTime       @default(now())
+}
+
+model CalendarEvent {
+  id          String        @id @default(uuid())
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  title       String
+  start       DateTime
+  end         DateTime?
+  platform    PlatformType  @default(YOUTUBE)
+  status      ContentStatus @default(SCHEDULED)
+  contentId   String?
+}
+
+model Video {
+  id          String           @id @default(uuid())
+  workspaceId String
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  title       String
+  filename    String
+  fileUrl     String
+  durationSec Float            @default(0)
+  status      String           @default("READY")
+  createdAt   DateTime         @default(now())
+  transcript  VideoTranscript?
+  clips       VideoClip[]
+}
+
+model VideoTranscript {
+  id        String   @id @default(uuid())
+  videoId   String   @unique
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  text      String
+  segments  Json
+  createdAt DateTime @default(now())
+}
+
+model VideoClip {
+  id          String       @id @default(uuid())
+  videoId     String
+  video       Video        @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  title       String
+  hook        String?
+  startSec    Float
+  endSec      Float
+  durationSec Float
+  score       Int          @default(88)
+  platform    PlatformType @default(TIKTOK)
+  clipUrl     String?
+  createdAt   DateTime     @default(now())
+}
+
+model Thumbnail {
+  id            String       @id @default(uuid())
+  workspaceId   String
+  workspace     Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  title         String
+  imageUrl      String
+  platform      PlatformType @default(YOUTUBE)
+  template      String?
+  colors        String[]     @default([])
+  variantGroup  String?
+  clickEstimate Float        @default(12.5)
+  createdAt     DateTime     @default(now())
+}
+
+model AudienceMetric {
+  id            String    @id @default(uuid())
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  totalAudience Int       @default(0)
+  growthRate    Float     @default(0.0)
+  demographics  Json?
+  createdAt     DateTime  @default(now())
+}
+
+model AudienceQuestion {
+  id          String       @id @default(uuid())
+  workspaceId String
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  question    String
+  platform    PlatformType @default(YOUTUBE)
+  frequency   Int          @default(1)
+  sentiment   String       @default("POSITIVE")
+  topic       String?
+  status      String       @default("UNANSWERED")
+  createdAt   DateTime     @default(now())
+}
+
+model Comment {
+  id          String       @id @default(uuid())
+  workspaceId String
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  authorName  String
+  avatar      String?
+  text        String
+  platform    PlatformType @default(YOUTUBE)
+  sentiment   String       @default("POSITIVE")
+  isAnswered  Boolean      @default(false)
+  isQuestion  Boolean      @default(false)
+  isToxic     Boolean      @default(false)
+  reply       String?
+  createdAt   DateTime     @default(now())
+}
+
+model Trend {
+  id              String       @id @default(uuid())
+  workspaceId     String
+  workspace       Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  topic           String
+  platform        PlatformType @default(TIKTOK)
+  category        String
+  velocity        Float        @default(1.0)
+  volume          Int          @default(1000)
+  suggestedAction String?
+  createdAt       DateTime     @default(now())
+}
+
+model Automation {
+  id               String          @id @default(uuid())
+  workspaceId      String
+  workspace        Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name             String
+  description      String?
+  trigger          String
+  conditions       Json?
+  actions          Json
+  isActive         Boolean         @default(true)
+  runsCount        Int             @default(0)
+  timeSavedMinutes Int             @default(0)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  runs             AutomationRun[]
+}
+
+model AutomationRun {
+  id           String     @id @default(uuid())
+  automationId String
+  automation   Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  event        String
+  details      String?
+  status       String
+  error        String?
+  executedAt   DateTime   @default(now())
+}
+
+model CreatorBrain {
+  id               String    @id @default(uuid())
+  workspaceId      String    @unique
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  pillars          String[]  @default([])
+  targetAudience   String?
+  missionStatement String?
+  nicheContext     String?
+  rules            String[]  @default([])
+  updatedAt        DateTime  @updatedAt
+}
+
+model CreatorMemory {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  key         String
+  value       String
+  category    String    @default("GENERAL")
+  createdAt   DateTime  @default(now())
+}
+
+model BrandKit {
+  id          String    @id @default(uuid())
+  workspaceId String    @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  logoUrl     String?
+  colors      String[]  @default(["#4F46E5", "#7C3AED", "#06B6D4"])
+  fonts       String[]  @default(["Inter", "Poppins"])
+  brandVoice  String    @default("Inspiring, Actionable, Professional")
+  handles     Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model BrandDeal {
+  id            String    @id @default(uuid())
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  brandName     String
+  contactPerson String?
+  contactEmail  String?
+  dealValue     Float     @default(0)
+  stage         String    @default("LEAD")
+  deliverables  String[]  @default([])
+  paymentStatus String    @default("PENDING")
+  notes         String?
+  dueDate       DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Campaign {
+  id           String    @id @default(uuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  title        String
+  brandName    String
+  budget       Float     @default(0)
+  status       String    @default("ACTIVE")
+  deadline     DateTime?
+  deliverables Json?
+  createdAt    DateTime  @default(now())
+}
+
+model TeamTask {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  title       String
+  assignedTo  String?
+  status      String    @default("TODO")
+  priority    String    @default("MEDIUM")
+  dueDate     DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model Report {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  title       String
+  type        String
+  metrics     Json
+  summary     String?
+  createdAt   DateTime  @default(now())
+}
+
+model Notification {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  title       String
+  message     String
+  type        String
+  isRead      Boolean   @default(false)
+  link        String?
+  createdAt   DateTime  @default(now())
+}
+
+model Subscription {
+  id          String    @id @default(uuid())
+  workspaceId String    @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  plan        String    @default("PRO")
+  status      String    @default("ACTIVE")
+  renewsAt    DateTime?
+  price       Float     @default(49.0)
+  features    String[]  @default([])
+  createdAt   DateTime  @default(now())
+}
+
+model SecuritySession {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device     String   @default("Desktop / Windows")
+  ipAddress  String   @default("127.0.0.1")
+  lastActive DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
+
+model AdminUser {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      String   @default("SUPER_ADMIN")
+  createdAt DateTime @default(now())
+}
+
+model FeatureFlag {
+  id          String  @id @default(uuid())
+  key         String  @unique
+  name        String
+  isEnabled   Boolean @default(true)
+  description String?
+}

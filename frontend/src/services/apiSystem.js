@@ -1,0 +1,50 @@
+import { apiRequest } from './apiCore';
+
+export const systemApi = {
+  getAudience: () => apiRequest('/audience'),
+  getAudienceQuestions: () => apiRequest('/audience/questions'),
+  turnQuestionToIdea: (id) => apiRequest(`/audience/questions/${id}/turn-idea`, { method: 'POST' }),
+  getComments: () => apiRequest('/audience/comments'),
+  replyComment: (id, replyText) => apiRequest(`/audience/comments/${id}/reply`, { method: 'POST', body: JSON.stringify({ replyText }) }),
+  hideComment: (id) => apiRequest(`/audience/comments/${id}/hide`, { method: 'POST' }),
+  getTrends: () => apiRequest('/trends/trends'),
+  getBenchmarks: () => apiRequest('/trends/benchmark'),
+
+  getAutopilot: () => apiRequest('/autopilot'),
+  toggleAutopilotRule: (id) => apiRequest(`/autopilot/${id}/toggle`, { method: 'POST' }),
+  createAutopilotRule: (data) => apiRequest('/autopilot/rules', { method: 'POST', body: JSON.stringify(data) }),
+  getAutopilotLogs: () => apiRequest('/autopilot/logs'),
+
+  getBrain: () => apiRequest('/brand/brain'),
+  updateBrain: (data) => apiRequest('/brand/brain', { method: 'PUT', body: JSON.stringify(data) }),
+  getMemories: () => apiRequest('/brand/memory'),
+  createMemory: (data) => apiRequest('/brand/memory', { method: 'POST', body: JSON.stringify(data) }),
+  deleteMemory: (id) => apiRequest(`/brand/memory/${id}`, { method: 'DELETE' }),
+  getBrandKit: () => apiRequest('/brand/kit'),
+  updateBrandKit: (data) => apiRequest('/brand/kit', { method: 'PUT', body: JSON.stringify(data) }),
+  getBrandPreview: () => apiRequest('/brand/preview'),
+  getRevenue: () => apiRequest('/revenue'),
+  getDeals: () => apiRequest('/revenue/deals'),
+  createDeal: (data) => apiRequest('/revenue/deals', { method: 'POST', body: JSON.stringify(data) }),
+  updateDeal: (id, data) => apiRequest(`/revenue/deals/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  getCampaigns: () => apiRequest('/revenue/campaigns'),
+  createCampaign: (data) => apiRequest('/revenue/campaigns', { method: 'POST', body: JSON.stringify(data) }),
+  getTeam: () => apiRequest('/team/team'),
+  inviteTeamMember: (data) => apiRequest('/team/team/invite', { method: 'POST', body: JSON.stringify(data) }),
+  createTeamTask: (data) => apiRequest('/team/team/tasks', { method: 'POST', body: JSON.stringify(data) }),
+  updateTeamTask: (id, data) => apiRequest(`/team/team/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  getReports: () => apiRequest('/team/reports'),
+  getReportDetail: (id) => apiRequest(`/team/reports/${id}`),
+  generateReport: (data) => apiRequest('/team/reports/generate', { method: 'POST', body: JSON.stringify(data) }),
+
+  getNotifications: () => apiRequest('/system/notifications'),
+  markNotificationsRead: () => apiRequest('/system/notifications/mark-all-read', { method: 'POST' }),
+  search: (query) => apiRequest(`/system/search?q=${encodeURIComponent(query)}`),
+  getSettings: () => apiRequest('/system/settings'),
+  updateAccountSettings: (data) => apiRequest('/system/settings/account', { method: 'PUT', body: JSON.stringify(data) }),
+  updateAISettings: (data) => apiRequest('/system/settings/ai', { method: 'PUT', body: JSON.stringify(data) }),
+  getBilling: () => apiRequest('/system/billing'),
+  getSecurity: () => apiRequest('/system/security'),
+  reAnalyze: () => apiRequest('/system/re-analyze', { method: 'POST' })
+};
+

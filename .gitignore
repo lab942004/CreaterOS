@@ -1,0 +1,111 @@
+# ==========================================================
+# CreatorOS  |  Root .gitignore
+# Monorepo: frontend (React+Vite) · admin (React+Vite) · backend (Express+TS+Prisma)
+# ==========================================================
+
+# ----------------------------------------------------------
+# Dependencies
+# ----------------------------------------------------------
+node_modules/
+.pnp
+.pnp.js
+.pnp.cjs
+jspm_packages/
+
+# ----------------------------------------------------------
+# Build output
+# ----------------------------------------------------------
+dist/
+dist-ssr/
+build/
+out/
+*.tsbuildinfo
+
+# ----------------------------------------------------------
+# Bundler / linter / tooling caches
+# ----------------------------------------------------------
+.vite/
+.cache/
+cache/
+.temp/
+.tmp/
+.eslintcache
+.oxlintcache
+.stylelintcache
+
+# ----------------------------------------------------------
+# Environment variables & secrets
+# Keep the checked-in template only
+# ----------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# ----------------------------------------------------------
+# Logs
+# ----------------------------------------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ----------------------------------------------------------
+# Testing & coverage
+# ----------------------------------------------------------
+coverage/
+*.lcov
+.nyc_output/
+
+# ----------------------------------------------------------
+# Prisma (generated client lives in node_modules/.prisma)
+# Skip local SQLite/db artifacts
+# ----------------------------------------------------------
+prisma/*.db
+prisma/*.db-journal
+prisma/migrations/dev.db*
+
+# ----------------------------------------------------------
+# Runtime data, uploads & media storage
+# ----------------------------------------------------------
+uploads/
+storage/
+*.sqlite
+*.sqlite3
+
+# ----------------------------------------------------------
+# Editor & IDE
+# ----------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.local
+
+# ----------------------------------------------------------
+# Operating system files
+# ----------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ----------------------------------------------------------
+# Miscellaneous
+# ----------------------------------------------------------
+*.pid
+*.pid.lock
+*.seed
+*.orig
+*.rej

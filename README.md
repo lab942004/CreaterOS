@@ -42,10 +42,39 @@ CreaterOS/
 │   │   ├── pages/        # Dashboard, Users, Workspaces, Health, AI Usage, Flags...
 │   │   └── services/     # adminApi client
 │
-├── docker-compose.yml    # Containerized multi-service deployment
 ├── .env.example          # Environment variable specifications
 └── README.md
 ```
+
+---
+
+## 🔐 Accounts & Credentials
+
+No credentials are committed to this repository. Configure them in
+`backend/.env` (copy the template first):
+
+```bash
+cp .env.example backend/.env
+```
+
+| Account | Configured by | Notes |
+| --- | --- | --- |
+| Creator | Seeded by `npm run seed` | Defined by the `DEMO` constant in `backend/src/scripts/seed.ts` — it is hashed into the database, not printed to the console. |
+| Super Admin | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | **Required in production.** The seeder refuses to create a default admin when `NODE_ENV=production` and `ADMIN_PASSWORD` is empty. |
+
+Both accounts are created by the same command — there is no separate
+`seed:admin` script:
+
+```bash
+cd backend
+npm run migrate:deploy
+npm run seed          # creates the admin account and the demo workspace
+```
+
+> **Why no default password?** A password checked into a README is a password
+> that reaches production. Set `ADMIN_PASSWORD` to a strong, unique value
+> before seeding, and keep `backend/.env` out of version control (it is already
+> listed in `.gitignore`).
 
 ---
 
@@ -66,10 +95,8 @@ cd frontend
 npm install
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-Default Creator Login:
-- Email: `creator@creatoros.ai`
-- Password: `CreatorOS@2026`
+Open [http://localhost:3000](http://localhost:3000) in your browser and sign in
+with the creator account you seeded.
 
 ### 3. Start the Dedicated Admin Portal (Port 3001)
 ```bash
@@ -77,10 +104,17 @@ cd admin
 npm install
 npm run dev
 ```
-Open [http://localhost:3001](http://localhost:3001) in your browser.
-Default Admin Login:
-- Email: `admin@creatoros.ai`
-- Password: `CreatorOS@2026`
+Open [http://localhost:3001](http://localhost:3001) in your browser and sign in
+with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` you configured.
+
+> **Port mismatch to watch for.** Vite serves the creator app on **3000**, but
+> the backend's defaults for `CORS_ORIGIN` and `APP_URL` assume **5173**
+> (`backend/src/config/index.ts`). If login requests are rejected by CORS or
+> password-reset links point at a dead port, set these in `backend/.env`:
+> ```env
+> CORS_ORIGIN="http://localhost:3000,http://localhost:3001"
+> APP_URL="http://localhost:3000"
+> ```
 
 ---
 

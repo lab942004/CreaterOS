@@ -1,5 +1,14 @@
 const API_BASE = '/api/admin';
 
+/** Admin endpoints answer with `{ success, data, message }`; screens expect `data`. */
+const unwrap = (body) => (body && body.success === true && 'data' in body ? body.data : body);
+
+const messageFrom = (body) => {
+  if (!body) return null;
+  if (body.error) return typeof body.error === 'string' ? body.error : body.error.message;
+  return body.message || null;
+};
+
 export async function adminRequest(endpoint, options = {}) {
   const token = localStorage.getItem('creatoros_admin_token');
   const headers = {
@@ -10,11 +19,11 @@ export async function adminRequest(endpoint, options = {}) {
 
   try {
     const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    const body = await res.json().catch(() => null);
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Admin API error (${res.status})`);
+      throw new Error(messageFrom(body) || `Admin API error (${res.status})`);
     }
-    return await res.json();
+    return unwrap(body);
   } catch (err) {
     console.error(`Admin API Error [${endpoint}]:`, err);
     throw err;

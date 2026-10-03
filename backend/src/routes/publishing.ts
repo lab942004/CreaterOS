@@ -1,102 +1,170 @@
 import { Router } from 'express';
-import { dbStore } from '../utils/store';
+import { ContentType, PlatformType } from '@prisma/client';
+import { prisma } from '../utils/prisma';
+import { asyncHandler, asEnum, notFound, ok } from '../utils/errors';
+import { AuthRequest, requireWorkspace } from '../middleware/auth';
 import { SocialPlatformFactory } from '../integrations/socialAdapter';
 
 const router = Router();
+router.use(requireWorkspace);
 
 // SCREEN 17 — CALENDAR
-router.get('/calendar', (req, res) => {
-  const events = dbStore.contents.map(c => ({
-    id: c.id,
-    title: c.title,
-    start: c.scheduledAt || c.publishedAt || c.createdAt,
-    platform: c.platform,
-    status: c.status,
-    type: c.type
-  }));
-  res.json({ events });
-});
+router.get(
+  '/calendar',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const workspaceId = req.workspaceId!;
+
+    const [contents, planned] = await Promise.all([
+      prisma.content.findMany({ where: { workspaceId } }),
+      prisma.calendarEvent.findMany({ where: { workspaceId }, orderBy: { start: 'asc' } }),
+    ]);
+
+    const fromContents = contents.map((c) => ({
+      id: c.id,
+      title: c.title,
+      start: c.scheduledAt || c.publishedAt || c.createdAt,
+      platform: c.platform,
+      status: c.status,
+      type: c.type,
+    }));
+
+    const fromPlan = planned.map((e) => ({
+      id: e.id,
+      title: e.title,
+      start: e.start,
+      platform: e.platform,
+      status: e.status,
+      type: 'POST' as const,
+    }));
+
+    const events = [...fromContents, ...fromPlan].sort(
+      (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+    );
+
+    ok(res, { events });
+  })
+);
 
 // Reschedule drag & drop
-router.post('/calendar/reschedule', (req, res) => {
-  const { contentId, newDate } = req.body;
-  const content = dbStore.contents.find(c => c.id === contentId);
-  if (!content) return res.status(404).json({ error: 'Content not found' });
-  content.scheduledAt = newDate;
-  content.status = 'SCHEDULED';
-  res.json({ success: true, content });
-});
+router.post(
+  '/calendar/reschedule',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const { contentId, newDate } = req.body ?? {};
+    const workspaceId = req.workspaceId!;
+
+    const content = await prisma.content.findFirst({
+      where: { id: contentId, workspaceId },
+    });
+    if (content) {
+      const updated = await prisma.content.update({
+        where: { id: content.id },
+        data: { scheduledAt: new Date(newDate), status: 'SCHEDULED' },
+      });
+      return ok(res, { success: true, content: updated });
+    }
+
+    const event = await prisma.calendarEvent.findFirst({
+      where: { id: contentId, workspaceId },
+    });
+    if (!event) throw notFound('Content not found.');
+
+    const updated = await prisma.calendarEvent.update({
+      where: { id: event.id },
+      data: { start: new Date(newDate), status: 'SCHEDULED' },
+    });
+    ok(res, { success: true, content: updated });
+  })
+);
 
 // SCREEN 18 — COMPOSER & PUBLISH
-router.post('/compose', async (req, res) => {
-  const { title, caption, platform, type, scheduleTime, mediaUrl, tags } = req.body;
+router.post(
+  '/compose',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const { title, caption, platform, type, scheduleTime, mediaUrl, tags } = req.body ?? {};
+    const workspaceId = req.workspaceId!;
 
-  const isImmediate = !scheduleTime || new Date(scheduleTime).getTime() <= Date.now();
-  const status = isImmediate ? 'PUBLISHED' : 'SCHEDULED';
+    const platformValue =
+      (asEnum(platform, Object.values(PlatformType)) ?? 'YOUTUBE') as PlatformType;
+    const typeValue = (asEnum(type, Object.values(ContentType)) ?? 'POST') as ContentType;
 
-  let postUrl = '';
-  if (isImmediate) {
-    const adapter = SocialPlatformFactory.getAdapter(platform || 'YOUTUBE');
-    const pubResult = await adapter.publishContent({ title, caption, mediaUrl });
-    postUrl = pubResult.url;
-  }
+    const isImmediate = !scheduleTime || new Date(scheduleTime).getTime() <= Date.now();
 
-  const newPost = {
-    id: `cnt_${Date.now()}`,
-    workspaceId: 'ws_main_01',
-    title: title || 'Composed Post',
-    description: caption || '',
-    caption: caption || '',
-    type: type || 'POST',
-    platform: platform || 'YOUTUBE',
-    status,
-    thumbnailUrl: mediaUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80',
-    mediaUrl: mediaUrl || '',
-    scheduledAt: scheduleTime || null,
-    publishedAt: isImmediate ? new Date().toISOString() : null,
-    tags: tags || ['CreatorOS'],
-    views: isImmediate ? 142 : 0,
-    likes: isImmediate ? 18 : 0,
-    commentsCount: 0,
-    shares: 0,
-    engagementRate: 0,
-    watchTimeMinutes: 0,
-    createdAt: new Date().toISOString()
-  };
+    let postUrl = '';
+    if (isImmediate) {
+      const adapter = SocialPlatformFactory.getAdapter(platformValue);
+      const pubResult = await adapter.publishContent({
+        title: String(title ?? ''),
+        caption: String(caption ?? ''),
+        mediaUrl,
+      });
+      postUrl = pubResult.url;
+    }
 
-  dbStore.contents.unshift(newPost);
+    const content = await prisma.content.create({
+      data: {
+        workspaceId,
+        title: title || 'Composed Post',
+        description: caption || '',
+        caption: caption || '',
+        type: typeValue,
+        platform: platformValue,
+        status: isImmediate ? 'PUBLISHED' : 'SCHEDULED',
+        thumbnailUrl:
+          mediaUrl ||
+          'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80',
+        mediaUrl: mediaUrl || '',
+        scheduledAt: scheduleTime ? new Date(scheduleTime) : null,
+        publishedAt: isImmediate ? new Date() : null,
+        tags: Array.isArray(tags) && tags.length ? tags.map(String) : ['CreatorOS'],
+        views: isImmediate ? 142 : 0,
+        likes: isImmediate ? 18 : 0,
+      },
+    });
 
-  // Trigger Action Notification
-  dbStore.notifications.unshift({
-    id: `notif_${Date.now()}`,
-    workspaceId: 'ws_main_01',
-    title: isImmediate ? 'Content Published' : 'Post Scheduled',
-    message: isImmediate ? `"${newPost.title}" was published to ${platform}.` : `Scheduled for ${scheduleTime}.`,
-    type: 'PUBLISHING',
-    isRead: false,
-    link: `/content/${newPost.id}`,
-    createdAt: new Date().toISOString()
-  });
+    await prisma.notification.create({
+      data: {
+        workspaceId,
+        title: isImmediate ? 'Content Published' : 'Post Scheduled',
+        message: isImmediate
+          ? `"${content.title}" was published to ${platformValue}.`
+          : `Scheduled for ${scheduleTime}.`,
+        type: 'PUBLISHING',
+        link: `/content/${content.id}`,
+      },
+    });
 
-  res.status(201).json({ success: true, content: newPost, postUrl });
-});
+    ok(res, { success: true, content, postUrl }, undefined, 201);
+  })
+);
 
 // SCREEN 31 — SMART SCHEDULER
-router.get('/smart-scheduler', (req, res) => {
-  res.json({
-    recommendations: [
-      { platform: 'YOUTUBE', bestTime: 'Thursday 3:00 PM EST', confidenceScore: 94, reason: 'Peak subscriber activity on tech channels.' },
-      { platform: 'TIKTOK', bestTime: 'Friday 7:30 PM EST', confidenceScore: 91, reason: 'High weekend viral scroll momentum.' },
-      { platform: 'LINKEDIN', bestTime: 'Tuesday 8:15 AM EST', confidenceScore: 89, reason: 'Commute and morning executive feed scans.' },
-      { platform: 'INSTAGRAM', bestTime: 'Wednesday 12:00 PM EST', confidenceScore: 86, reason: 'Lunchtime mobile browsing surge.' }
-    ]
-  });
-});
+router.get(
+  '/smart-scheduler',
+  asyncHandler(async (_req: AuthRequest, res) => {
+    ok(res, {
+      recommendations: [
+        { platform: 'YOUTUBE', bestTime: 'Thursday 3:00 PM EST', confidenceScore: 94, reason: 'Peak subscriber activity on tech channels.' },
+        { platform: 'TIKTOK', bestTime: 'Friday 7:30 PM EST', confidenceScore: 91, reason: 'High weekend viral scroll momentum.' },
+        { platform: 'LINKEDIN', bestTime: 'Tuesday 8:15 AM EST', confidenceScore: 89, reason: 'Commute and morning executive feed scans.' },
+        { platform: 'INSTAGRAM', bestTime: 'Wednesday 12:00 PM EST', confidenceScore: 86, reason: 'Lunchtime mobile browsing surge.' },
+      ],
+    });
+  })
+);
 
 // SCREEN 32 — PUBLISHING QUEUE
-router.get('/queue', (req, res) => {
-  const queue = dbStore.contents.filter(c => c.status === 'SCHEDULED' || c.status === 'PUBLISHING');
-  res.json({ queue });
-});
+router.get(
+  '/queue',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const queue = await prisma.content.findMany({
+      where: {
+        workspaceId: req.workspaceId!,
+        status: { in: ['SCHEDULED', 'PUBLISHING'] },
+      },
+      orderBy: { scheduledAt: 'asc' },
+    });
+    ok(res, { queue });
+  })
+);
 
 export default router;

@@ -1,17 +1,15 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { ArrowRight, Lock, Mail, Sparkles } from 'lucide-react';
+import { ArrowRight, Lock, Mail } from 'lucide-react';
 import AuthShell from '../components/auth/AuthShell';
 import { Button } from '../components/ui/Button';
 import { Field, Input } from '../components/ui/Form';
 import { Alert } from '../components/ui/Feedback';
 import { api } from '../services/api';
 
-const DEMO = { email: 'creator@creatoros.ai', password: 'CreatorOS@2026' };
-
 export default function Login() {
-  const [email, setEmail] = useState(DEMO.email);
-  const [password, setPassword] = useState(DEMO.password);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -90,19 +88,6 @@ export default function Login() {
         </Button>
       </form>
 
-      <div className="mt-5 flex items-center gap-3">
-        <span className="h-px flex-1 bg-line" />
-        <span className="text-caption text-ink-3">or</span>
-        <span className="h-px flex-1 bg-line" />
-      </div>
-
-      <Alert tone="ai" className="mt-4" title="Demo workspace">
-        <span className="block">
-          Credentials are pre-filled. Press <strong className="text-ink">Sign in</strong> to explore the full product with
-          seeded data — <span className="font-mono text-ink-2">{DEMO.email}</span>
-        </span>
-        <Sparkles className="hidden" aria-hidden="true" />
-      </Alert>
     </AuthShell>
   );
 }

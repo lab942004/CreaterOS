@@ -46,33 +46,116 @@ enum PlatformType {
 }
 
 model User {
-  id             String            @id @default(uuid())
-  email          String            @unique
-  name           String
-  password       String
-  avatar         String?
-  role           Role              @default(OWNER)
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  onboardingStep Int               @default(1)
-  isOnboarded    Boolean           @default(false)
-  profile        Profile?
-  workspaces     WorkspaceMember[]
-  sessions       SecuritySession[]
-  auditLogs      AuditLog[]
+  id                String             @id @default(uuid())
+  email             String             @unique
+  name              String
+  password          String
+  avatar            String?
+  role              Role               @default(OWNER)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  onboardingStep    Int                @default(1)
+  isOnboarded       Boolean            @default(false)
+  emailVerified     Boolean            @default(false)
+  emailVerifiedAt   DateTime?
+  passwordChangedAt DateTime?
+  isActive          Boolean            @default(true)
+  profile           Profile?
+  workspaces        WorkspaceMember[]
+  sessions          SecuritySession[]
+  auditLogs         AuditLog[]
+  verifications     EmailVerification[]
+  passwordResets    PasswordReset[]
+  refreshTokens     RefreshToken[]
+  aiUsage           AIUsage[]
+
+  @@index([emailVerified])
+  @@index([createdAt])
+}
+
+model EmailVerification {
+  id         String    @id @default(uuid())
+  userId     String
+  email      String
+  otpHash    String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordReset {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?
+  ipAddress String?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AIUsage {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String?
+  provider    String
+  model       String
+  requestType String
+  tokenUsage  Int      @default(0)
+  costUsd     Float    @default(0)
+  latencyMs   Int      @default(0)
+  status      String   @default("SUCCESS")
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([createdAt])
 }
 
 model Profile {
-  id        String   @id @default(uuid())
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  niche     String?
-  bio       String?
-  goals     String[] @default([])
-  platforms String[] @default([])
-  timezone  String   @default("UTC")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  niche           String?
+  bio             String?
+  goals           String[] @default([])
+  platforms       String[] @default([])
+  timezone        String   @default("UTC")
+  handle          String?
+  creatorType     String?
+  audience        String?
+  audienceSize    String?
+  contentTypes    String[] @default([])
+  tones           String[] @default([])
+  voice           String?
+  importSelection String[] @default([])
+  aiSettings      Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model Workspace {
@@ -106,6 +189,8 @@ model Workspace {
   reports         Report[]
   notifications   Notification[]
   subscription    Subscription?
+
+  @@index([ownerId])
 }
 
 model WorkspaceMember {
@@ -118,6 +203,8 @@ model WorkspaceMember {
   createdAt   DateTime  @default(now())
 
   @@unique([workspaceId, userId])
+  @@index([userId])
+  @@index([workspaceId])
 }
 
 model SocialAccount {
@@ -131,13 +218,16 @@ model SocialAccount {
   avatarUrl    String?
   followers    Int          @default(0)
   isConnected  Boolean      @default(true)
-  isMock       Boolean      @default(true)
   accessToken  String?
   refreshToken String?
   tokenExpires DateTime?
+  lastSyncedAt DateTime?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   contents     Content[]
+
+  @@unique([workspaceId, platform, username])
+  @@index([workspaceId])
 }
 
 model Content {
@@ -167,6 +257,11 @@ model Content {
   updatedAt        DateTime        @updatedAt
   dna              ContentDNA?
   metrics          ContentMetric[]
+
+  @@index([workspaceId])
+  @@index([status])
+  @@index([platform])
+  @@index([createdAt])
 }
 
 model ContentDNA {
@@ -216,6 +311,9 @@ model Idea {
   isFavorite     Boolean      @default(false)
   isArchived     Boolean      @default(false)
   createdAt      DateTime     @default(now())
+
+  @@index([workspaceId])
+  @@index([createdAt])
 }
 
 model Opportunity {
@@ -229,6 +327,9 @@ model Opportunity {
   impactScore Int          @default(85)
   actionType  String
   createdAt   DateTime     @default(now())
+
+  @@index([workspaceId])
+  @@index([createdAt])
 }
 
 model Strategy {
@@ -241,6 +342,8 @@ model Strategy {
   pillars     String[]  @default([])
   goals       String[]  @default([])
   createdAt   DateTime  @default(now())
+
+  @@index([workspaceId])
 }
 
 model AIConversation {
@@ -273,6 +376,9 @@ model CalendarEvent {
   platform    PlatformType  @default(YOUTUBE)
   status      ContentStatus @default(SCHEDULED)
   contentId   String?
+
+  @@index([workspaceId])
+  @@index([start])
 }
 
 model Video {
@@ -287,6 +393,9 @@ model Video {
   createdAt   DateTime         @default(now())
   transcript  VideoTranscript?
   clips       VideoClip[]
+
+  @@index([workspaceId])
+  @@index([createdAt])
 }
 
 model VideoTranscript {
@@ -325,6 +434,9 @@ model Thumbnail {
   variantGroup  String?
   clickEstimate Float        @default(12.5)
   createdAt     DateTime     @default(now())
+
+  @@index([workspaceId])
+  @@index([createdAt])
 }
 
 model AudienceMetric {
@@ -335,6 +447,9 @@ model AudienceMetric {
   growthRate    Float     @default(0.0)
   demographics  Json?
   createdAt     DateTime  @default(now())
+
+  @@index([workspaceId])
+  @@index([createdAt])
 }
 
 model AudienceQuestion {
@@ -348,6 +463,9 @@ model AudienceQuestion {
   topic       String?
   status      String       @default("UNANSWERED")
   createdAt   DateTime     @default(now())
+
+  @@index([workspaceId])
+  @@index([createdAt])
 }
 
 model Comment {
@@ -364,6 +482,9 @@ model Comment {
   isToxic     Boolean      @default(false)
   reply       String?
   createdAt   DateTime     @default(now())
+
+  @@index([workspaceId])
+  @@index([createdAt])
 }
 
 model Trend {
@@ -377,6 +498,9 @@ model Trend {
   volume          Int          @default(1000)
   suggestedAction String?
   createdAt       DateTime     @default(now())
+
+  @@index([workspaceId])
+  @@index([createdAt])
 }
 
 model Automation {
@@ -394,6 +518,9 @@ model Automation {
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   runs             AutomationRun[]
+
+  @@index([workspaceId])
+  @@index([createdAt])
 }
 
 model AutomationRun {
@@ -426,7 +553,15 @@ model CreatorMemory {
   key         String
   value       String
   category    String    @default("GENERAL")
+  /// Times this memory was recalled into a prompt (reinforcement signal).
+  useCount    Int       @default(0)
+  lastUsedAt  DateTime?
+  /// Vector for semantic recall; null means keyword-only recall.
+  embedding   Json?
   createdAt   DateTime  @default(now())
+
+  @@index([workspaceId])
+  @@index([category])
 }
 
 model BrandKit {
@@ -457,6 +592,9 @@ model BrandDeal {
   dueDate       DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  @@index([workspaceId])
+  @@index([createdAt])
 }
 
 model Campaign {
@@ -470,6 +608,9 @@ model Campaign {
   deadline     DateTime?
   deliverables Json?
   createdAt    DateTime  @default(now())
+
+  @@index([workspaceId])
+  @@index([createdAt])
 }
 
 model TeamTask {
@@ -482,6 +623,9 @@ model TeamTask {
   priority    String    @default("MEDIUM")
   dueDate     DateTime?
   createdAt   DateTime  @default(now())
+
+  @@index([workspaceId])
+  @@index([createdAt])
 }
 
 model Report {
@@ -493,6 +637,9 @@ model Report {
   metrics     Json
   summary     String?
   createdAt   DateTime  @default(now())
+
+  @@index([workspaceId])
+  @@index([createdAt])
 }
 
 model Notification {
@@ -505,6 +652,10 @@ model Notification {
   isRead      Boolean   @default(false)
   link        String?
   createdAt   DateTime  @default(now())
+
+  @@index([workspaceId])
+  @@index([isRead])
+  @@index([createdAt])
 }
 
 model Subscription {
@@ -527,6 +678,9 @@ model SecuritySession {
   ipAddress  String   @default("127.0.0.1")
   lastActive DateTime @default(now())
   createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([lastActive])
 }
 
 model AuditLog {
@@ -537,6 +691,10 @@ model AuditLog {
   details   String?
   ipAddress String?
   createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
 }
 
 model AdminUser {

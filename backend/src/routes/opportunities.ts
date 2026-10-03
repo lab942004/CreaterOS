@@ -1,62 +1,75 @@
 import { Router } from 'express';
-import { dbStore, OpportunityData } from '../utils/store';
+import { prisma } from '../utils/prisma';
+import { asyncHandler, badRequest, notFound, ok } from '../utils/errors';
+import { AuthRequest, requireWorkspace } from '../middleware/auth';
 
 const router = Router();
+router.use(requireWorkspace);
 
 // SCREEN 13 — OPPORTUNITY CENTER
-router.get('/', (req, res) => {
-  res.json({ opportunities: dbStore.opportunities });
-});
+router.get(
+  '/',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const opportunities = await prisma.opportunity.findMany({
+      where: { workspaceId: req.workspaceId! },
+      orderBy: { impactScore: 'desc' },
+    });
+    ok(res, { opportunities });
+  })
+);
 
-router.post('/action', (req, res) => {
-  const { opportunityId, actionType } = req.body;
-  const opp = dbStore.opportunities.find(o => o.id === opportunityId);
-  if (!opp) return res.status(404).json({ error: 'Opportunity not found' });
+router.post(
+  '/action',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const { opportunityId, actionType } = req.body ?? {};
+    const workspaceId = req.workspaceId!;
 
-  if (actionType === 'create_content') {
-    const newContent = {
-      id: `cnt_${Date.now()}`,
-      workspaceId: 'ws_main_01',
-      title: opp.title,
-      description: opp.description,
-      caption: `Taking immediate advantage of content opportunity: ${opp.title}`,
-      type: 'VIDEO',
-      platform: opp.platform,
-      status: 'DRAFT',
-      tags: ['Opportunity', opp.type],
-      views: 0,
-      likes: 0,
-      commentsCount: 0,
-      shares: 0,
-      engagementRate: 0,
-      watchTimeMinutes: 0,
-      createdAt: new Date().toISOString()
-    };
-    dbStore.contents.unshift(newContent);
-    return res.json({ success: true, redirect: `/content/${newContent.id}`, content: newContent });
-  }
+    const opp = await prisma.opportunity.findFirst({
+      where: { id: opportunityId, workspaceId },
+    });
+    if (!opp) throw notFound('Opportunity not found.');
 
-  if (actionType === 'turn_into_idea') {
-    const newIdea = {
-      id: `idea_${Date.now()}`,
-      workspaceId: 'ws_main_01',
-      title: opp.title,
-      hook: `Why everyone is missing out on ${opp.title}`,
-      format: 'VIDEO',
-      platform: opp.platform,
-      category: 'Opportunity',
-      reason: opp.description,
-      potentialScore: opp.impactScore,
-      cta: 'Subscribe for part 2',
-      isFavorite: true,
-      isArchived: false,
-      createdAt: new Date().toISOString()
-    };
-    dbStore.ideas.unshift(newIdea);
-    return res.json({ success: true, redirect: '/ideas', idea: newIdea });
-  }
+    if (actionType === 'create_content') {
+      const content = await prisma.content.create({
+        data: {
+          workspaceId,
+          title: opp.title,
+          description: opp.description,
+          caption: `Taking immediate advantage of content opportunity: ${opp.title}`,
+          type: 'VIDEO',
+          platform: opp.platform,
+          status: 'DRAFT',
+          tags: ['Opportunity', opp.type],
+        },
+      });
+      return ok(res, {
+        success: true,
+        redirect: `/content/${content.id}`,
+        content,
+      });
+    }
 
-  res.json({ success: true, message: 'Action executed successfully' });
-});
+    if (actionType === 'turn_into_idea') {
+      const idea = await prisma.idea.create({
+        data: {
+          workspaceId,
+          title: opp.title,
+          hook: `Why everyone is missing out on ${opp.title}`,
+          format: 'VIDEO',
+          platform: opp.platform,
+          category: 'Opportunity',
+          reason: opp.description,
+          potentialScore: opp.impactScore,
+          cta: 'Subscribe for part 2',
+          isFavorite: true,
+        },
+      });
+      return ok(res, { success: true, redirect: '/ideas', idea });
+    }
+
+    if (!actionType) throw badRequest('An action type is required.');
+    ok(res, { success: true, message: 'Action executed successfully' });
+  })
+);
 
 export default router;

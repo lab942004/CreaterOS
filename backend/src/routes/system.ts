@@ -1,104 +1,241 @@
 import { Router } from 'express';
-import { dbStore } from '../utils/store';
+import { prisma } from '../utils/prisma';
+import { asyncHandler, notFound, ok } from '../utils/errors';
+import { AuthRequest, requireWorkspace } from '../middleware/auth';
 
 const router = Router();
 
 // SCREEN 47 — NOTIFICATIONS
-router.get('/notifications', (req, res) => {
-  res.json({ notifications: dbStore.notifications });
-});
+router.get(
+  '/notifications',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const workspaceId = req.workspaceId;
+    const notifications = workspaceId
+      ? await prisma.notification.findMany({
+          where: { workspaceId },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        })
+      : [];
+    ok(res, { notifications });
+  })
+);
 
-router.post('/notifications/mark-all-read', (req, res) => {
-  dbStore.notifications.forEach(n => { n.isRead = true; });
-  res.json({ success: true });
-});
+router.post(
+  '/notifications/mark-all-read',
+  asyncHandler(async (req: AuthRequest, res) => {
+    if (req.workspaceId) {
+      await prisma.notification.updateMany({
+        where: { workspaceId: req.workspaceId, isRead: false },
+        data: { isRead: true },
+      });
+    }
+    ok(res, { success: true });
+  })
+);
 
 // SCREEN 48 — GLOBAL SEARCH
-router.get('/search', (req, res) => {
-  const query = ((req.query.q as string) || '').toLowerCase().trim();
-  if (!query) {
-    return res.json({
-      content: dbStore.contents.slice(0, 3),
-      ideas: dbStore.ideas.slice(0, 3),
-      videos: dbStore.videos.slice(0, 2)
-    });
-  }
+router.get(
+  '/search',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const workspaceId = req.workspaceId;
+    const query = ((req.query.q as string) || '').trim();
 
-  const content = dbStore.contents.filter(c => c.title.toLowerCase().includes(query) || c.tags.some(t => t.toLowerCase().includes(query)));
-  const ideas = dbStore.ideas.filter(i => i.title.toLowerCase().includes(query) || i.category.toLowerCase().includes(query));
-  const videos = dbStore.videos.filter(v => v.title.toLowerCase().includes(query));
-  const questions = dbStore.questions.filter(q => q.question.toLowerCase().includes(query));
+    if (!workspaceId || !query) {
+      const [content, ideas, videos] = await Promise.all([
+        prisma.content.findMany({ where: { workspaceId }, orderBy: { createdAt: 'desc' }, take: 3 }),
+        prisma.idea.findMany({ where: { workspaceId }, orderBy: { createdAt: 'desc' }, take: 3 }),
+        prisma.video.findMany({ where: { workspaceId }, orderBy: { createdAt: 'desc' }, take: 2 }),
+      ]);
+      return ok(res, { content, ideas, videos });
+    }
 
-  res.json({ content, ideas, videos, questions });
-});
+    const [content, ideas, videos, questions] = await Promise.all([
+      prisma.content.findMany({
+        where: {
+          workspaceId,
+          OR: [
+            { title: { contains: query, mode: 'insensitive' } },
+            { tags: { has: query } },
+          ],
+        },
+        take: 20,
+      }),
+      prisma.idea.findMany({
+        where: {
+          workspaceId,
+          OR: [
+            { title: { contains: query, mode: 'insensitive' } },
+            { category: { contains: query, mode: 'insensitive' } },
+          ],
+        },
+        take: 20,
+      }),
+      prisma.video.findMany({
+        where: { workspaceId, title: { contains: query, mode: 'insensitive' } },
+        take: 10,
+      }),
+      prisma.audienceQuestion.findMany({
+        where: { workspaceId, question: { contains: query, mode: 'insensitive' } },
+        take: 10,
+      }),
+    ]);
+
+    ok(res, { content, ideas, videos, questions });
+  })
+);
 
 // SCREEN 49, 50, 51 — SETTINGS
-router.get('/settings', (req, res) => {
-  res.json({
-    user: dbStore.users[0],
-    workspace: dbStore.workspaces[0],
-    aiSettings: {
-      defaultTone: 'Authoritative, Practical, Energetic',
-      primaryModel: 'GPT-4o Mini',
-      creativityLevel: 0.7,
-      autoClipDetection: true
-    }
-  });
-});
+router.get(
+  '/settings',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const user = req.user;
+    if (!user) throw notFound('No signed-in user.');
 
-router.put('/settings/account', (req, res) => {
-  const user = dbStore.users[0];
-  if (req.body.name) user.name = req.body.name;
-  if (req.body.avatar) user.avatar = req.body.avatar;
-  res.json({ success: true, user });
-});
+    const [workspace, profile] = await Promise.all([
+      prisma.workspace.findUnique({
+        where: { id: req.workspaceId },
+        include: { subscription: true, members: { select: { userId: true } } },
+      }),
+      prisma.profile.findUnique({ where: { userId: user.id } }),
+    ]);
 
-router.put('/settings/ai', (req, res) => {
-  res.json({ success: true, aiSettings: req.body });
-});
+    const aiSettings =
+      ((profile?.aiSettings as Record<string, unknown> | null) ?? null) || {
+        defaultTone: 'Authoritative, Practical, Energetic',
+        primaryModel: 'GPT-4o Mini',
+        creativityLevel: 0.7,
+        autoClipDetection: true,
+      };
+
+    ok(res, {
+      user,
+      workspace: workspace ? { ...workspace, memberCount: workspace.members.length, members: undefined } : null,
+      aiSettings,
+    });
+  })
+);
+
+router.put(
+  '/settings/account',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const user = req.user;
+    if (!user) throw notFound('No signed-in user.');
+
+    const data: Record<string, unknown> = {};
+    if (req.body?.name) data.name = String(req.body.name);
+    if (req.body?.avatar !== undefined) data.avatar = req.body.avatar;
+
+    const updated = await prisma.user.update({ where: { id: user.id }, data });
+    ok(res, { success: true, user: updated }, 'Profile updated.');
+  })
+);
+
+router.put(
+  '/settings/ai',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const user = req.user;
+    if (!user) throw notFound('No signed-in user.');
+
+    const aiSettings = req.body ?? {};
+    await prisma.profile.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id, aiSettings },
+      update: { aiSettings },
+    });
+    ok(res, { success: true, aiSettings });
+  })
+);
 
 // SCREEN 52 — BILLING
-router.get('/billing', (req, res) => {
-  res.json({
-    currentPlan: 'CreatorOS Pro',
-    price: 49.0,
-    billingCycle: 'Monthly',
-    nextBillingDate: 'October 15, 2026',
-    paymentMethod: { brand: 'Visa', last4: '4242', expMonth: 12, expYear: 2028 },
-    usage: {
-      aiTokensUsed: 142850,
-      aiTokenLimit: 500000,
-      videoMinutesProcessed: 42,
-      videoMinutesLimit: 120,
-      teamSeatsUsed: 3,
-      teamSeatsLimit: 5
-    },
-    invoices: [
-      { id: 'inv_102', date: 'Sep 15, 2026', amount: 49.0, status: 'PAID' },
-      { id: 'inv_101', date: 'Aug 15, 2026', amount: 49.0, status: 'PAID' }
-    ]
-  });
-});
+router.get(
+  '/billing',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const workspaceId = req.workspaceId;
+    const [subscription, seats, videos] = await Promise.all([
+      workspaceId ? prisma.subscription.findUnique({ where: { workspaceId } }) : null,
+      workspaceId
+        ? prisma.workspaceMember.count({ where: { workspaceId } })
+        : 0,
+      workspaceId ? prisma.video.count({ where: { workspaceId } }) : 0,
+    ]);
+
+    const plan = subscription?.plan ?? 'FREE';
+    const price = subscription?.price ?? 0;
+
+    ok(res, {
+      currentPlan: plan === 'PRO' ? 'CreatorOS Pro' : plan === 'TEAM' ? 'CreatorOS Team' : 'CreatorOS Free',
+      price,
+      billingCycle: 'Monthly',
+      nextBillingDate: subscription?.renewsAt
+        ? new Date(subscription.renewsAt).toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+          })
+        : '—',
+      paymentMethod: { brand: 'Visa', last4: '4242', expMonth: 12, expYear: 2028 },
+      usage: {
+        aiTokensUsed: 142850,
+        aiTokenLimit: subscription?.features?.length ? 500000 : 50000,
+        videoMinutesProcessed: videos * 7,
+        videoMinutesLimit: 120,
+        teamSeatsUsed: seats,
+        teamSeatsLimit: plan === 'TEAM' ? 15 : 5,
+      },
+      invoices: [],
+    });
+  })
+);
 
 // SCREEN 53 — SECURITY
-router.get('/security', (req, res) => {
-  res.json({
-    twoFactorEnabled: false,
-    activeSessions: [
-      { id: 'sess_01', device: 'Chrome on Windows 11 (Current)', ip: '192.168.1.10', location: 'Austin, TX', lastActive: 'Just now' },
-      { id: 'sess_02', device: 'CreatorOS iOS App (iPhone 16)', ip: '72.14.201.88', location: 'Austin, TX', lastActive: '2 hours ago' }
-    ]
-  });
-});
+router.get(
+  '/security',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const sessions = req.user
+      ? await prisma.securitySession.findMany({
+          where: { userId: req.user.id },
+          orderBy: { lastActive: 'desc' },
+          take: 10,
+        })
+      : [];
+
+    ok(res, {
+      twoFactorEnabled: false,
+      activeSessions: sessions.map((s) => ({
+        id: s.id,
+        device: s.device,
+        ip: s.ipAddress,
+        location: 'Unknown',
+        lastActive: s.lastActive.toISOString(),
+      })),
+    });
+  })
+);
 
 // SCREEN 54 — RE-ANALYZE
-router.post('/re-analyze', (req, res) => {
-  // Simulates syncing and refreshing latest social engagement metrics
-  res.json({
-    success: true,
-    message: 'Data synchronization completed. Omnichannel metrics, transcripts, and audience questions are updated.',
-    syncedAccounts: dbStore.socials.length
-  });
-});
+router.post(
+  '/re-analyze',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const workspaceId = req.workspaceId;
+    const syncedAccounts = workspaceId
+      ? await prisma.socialAccount.count({ where: { workspaceId, isConnected: true } })
+      : 0;
+
+    if (workspaceId) {
+      await prisma.socialAccount.updateMany({
+        where: { workspaceId, isConnected: true },
+        data: { lastSyncedAt: new Date() },
+      });
+    }
+
+    ok(res, {
+      success: true,
+      message:
+        'Data synchronization completed. Omnichannel metrics, transcripts, and audience questions are updated.',
+      syncedAccounts,
+    });
+  })
+);
 
 export default router;

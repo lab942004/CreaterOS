@@ -82,6 +82,8 @@ export default function Layout({ children }) {
   }, []);
 
   const handleLogout = useCallback(() => {
+    // Best effort: revoke the refresh token server-side before dropping the local session.
+    api.logout().catch(() => {});
     try {
       localStorage.removeItem('creatoros_token');
     } catch {

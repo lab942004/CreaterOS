@@ -1,109 +1,123 @@
 # ==========================================================
-# CreatorOS  |  Root .gitignore
+# CreatorOS | Root .gitignore
 # Monorepo: frontend (React+Vite) · admin (React+Vite) · backend (Express+TS+Prisma)
 # ==========================================================
 
-# ----------------------------------------------------------
 # Dependencies
-# ----------------------------------------------------------
 node_modules/
+**/node_modules/
 .pnp
 .pnp.js
 .pnp.cjs
 jspm_packages/
 
-# ----------------------------------------------------------
 # Build output
-# ----------------------------------------------------------
-dist/
-dist-ssr/
 build/
 out/
+dist/
+dist-ssr/
+**/dist/
+**/dist-ssr/
+**/build/
+**/out/
 *.tsbuildinfo
 
-# ----------------------------------------------------------
-# Bundler / linter / tooling caches
-# ----------------------------------------------------------
+# Tooling caches
 .vite/
+**/.vite/
 .cache/
+**/.cache/
 cache/
 .temp/
 .tmp/
+**/.temp/
+**/.tmp/
 .eslintcache
 .oxlintcache
 .stylelintcache
 
-# ----------------------------------------------------------
 # Environment variables & secrets
-# Keep the checked-in template only
-# ----------------------------------------------------------
 .env
-.env.*
-!.env.example
+**/.env
+.env.local
+**/.env.local
+.env.development
+**/.env.development
+.env.development.local
+**/.env.development.local
+.env.test
+**/.env.test
+.env.production
+**/.env.production
+.env.production.local
+**/.env.production.local
+.env.staging
+**/.env.staging
+.env.*.local
+**/.env.*.local
 
-# ----------------------------------------------------------
 # Logs
-# ----------------------------------------------------------
 logs/
+**/logs/
 *.log
+**/*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# ----------------------------------------------------------
 # Testing & coverage
-# ----------------------------------------------------------
 coverage/
+**/coverage/
 *.lcov
 .nyc_output/
+**/.nyc_output/
 
-# ----------------------------------------------------------
-# Prisma (generated client lives in node_modules/.prisma)
-# Skip local SQLite/db artifacts
-# ----------------------------------------------------------
-prisma/*.db
-prisma/*.db-journal
-prisma/migrations/dev.db*
-
-# ----------------------------------------------------------
-# Runtime data, uploads & media storage
-# ----------------------------------------------------------
-uploads/
-storage/
+# Databases / local runtime artifacts
+*.db
+*.db-journal
 *.sqlite
 *.sqlite3
+**/*.db
+**/*.sqlite
+**/*.sqlite3
 
-# ----------------------------------------------------------
-# Editor & IDE
-# ----------------------------------------------------------
+# Prisma migrations
+/backend/prisma/migrations/
+
+# Runtime data and uploads
+uploads/
+storage/
+**/uploads/
+**/storage/
+
+# Editor / IDE
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
 !.vscode/launch.json
 !.vscode/tasks.json
 .idea/
+**/.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 *.local
+**/*.local
 
-# ----------------------------------------------------------
-# Operating system files
-# ----------------------------------------------------------
+# OS files
 .DS_Store
+**/.DS_Store
 .DS_Store?
 ._*
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 
-# ----------------------------------------------------------
 # Miscellaneous
-# ----------------------------------------------------------
 *.pid
 *.pid.lock
 *.seed
